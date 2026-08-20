@@ -15,16 +15,29 @@ let cursor = {
     row: 0
 };
 
-let spans;
-let characters = [];
-let brElArr = [];
+let spans;      /* Array for each line and span for each character in each array. */
+let characters = [];        /* Array(44) [ "T", "h", "e", … ] */
+let brElArr = [];       /* <br> for each line */
 
+let inputBuffer = [];
+
+const commands = new Map([
+    ["h", moveLeft],
+    ["j", moveDown],
+    ["k", moveUp],
+    ["l", moveRight],
+    ["x", deleteChar],
+    ["dd", deleteLine],
+    ["i", insertCommand],
+]);
+
+let mode = "normal";        /* "insert" or "normal" */
 
 const texts = [
     "The quick brown fox jumps over the lazy dog.",
     "JavaScript allows you to manipulate elements on a web page.",
     "Learning Vim requires repetition and practice.",
-    "Functions allow you to organize reusable pieces of codeeeeeeee."
+    "Functions allow you to organize reusable pieces of codeeeeeeeeeeeeeeeeeeeeee."
 ];
 
 /*----------------------------------*/
@@ -69,6 +82,28 @@ function blinkingCursor() {
 }
 */
 
+function isPossibleCommand(input) {
+    for(const command of commands.keys()) {
+        if (command.startsWith(input)) return true;
+    }
+    return false;
+}
+
+function parseInput(event) {
+    inputBuffer.push(event.key);
+
+    let input = inputBuffer.join("");
+    if (commands.get(input)) {
+        inputBuffer.length = 0;
+        return commands.get(input);
+    }
+    else if (isPossibleCommand(input)) {
+        return null;
+    }
+    inputBuffer.length = 0;
+    return null;
+}
+
 function updateCursor() {
     const row = spans[cursor.row];
 
@@ -77,9 +112,15 @@ function updateCursor() {
     } else {
         brElArr[cursor.row].before(cursorElement);
     }
+
+    cursorElement.scrollIntoView({
+        behavior: "instant",
+        block: "nearest",
+        inline: "nearest"
+    });
 }
 
-function moveCursor(cursor, colOrRow, change) {
+function moveCursor(colOrRow, change) {
 
     if (colOrRow == "col") {
         cursor.col = cursor.col + change;
@@ -104,31 +145,31 @@ function moveCursor(cursor, colOrRow, change) {
 
 }
 
-function moveUp(cursor) {
+function moveUp() {
     if (cursor.row > 0) {
-        moveCursor(cursor, "row", -1);
+        moveCursor("row", -1);
     }
 }
 
-function moveLeft(cursor) {
+function moveLeft() {
     if (cursor.col > 0) {
-        moveCursor(cursor, "col", -1);
+        moveCursor("col", -1);
     }
 }
 
-function moveRight(cursor) {
+function moveRight() {
     if (cursor.col < spans[cursor.row].length - 1) {
-        moveCursor(cursor, "col", +1);
+        moveCursor("col", +1);
     }
 }
 
-function moveDown(cursor) {
+function moveDown() {
     if (cursor.row < spans.length - 1) {
-        moveCursor(cursor, "row", +1);
+        moveCursor("row", +1);
     }
 }
 
-function deleteChar(cursor) {
+function deleteChar() {
     characters[cursor.row].splice(cursor.col, 1);
 
     spans[cursor.row][cursor.col].remove();
@@ -140,31 +181,67 @@ function deleteChar(cursor) {
     updateCursor();
 }
 
+function deleteLine() {
+    if (brElArr.length > 0) {
+        const cursorWasOnLastLine = cursor.row == characters.length - 1;
+
+        if (brElArr.length > 1) {
+            brElArr[cursor.row].remove();
+            brElArr.splice(cursor.row, 1);
+        }
+
+        for (const span of spans[cursor.row]) {
+            span.remove();
+        }
+        spans.splice(cursor.row, 1);
+        characters.splice(cursor.row, 1);
+
+        if (cursorWasOnLastLine == true) {
+            cursor.row--;
+            updateCursor();
+        }
+    }
+}
+
+function insertCommand() {
+    mode = "insert";
+}
+
+function exitInsertMode() {
+    mode = "normal";
+}
+
+function handleInsertMode(event) {
+    const span = document.createElement("span");
+    span.textContent = event.key;
+
+    spans[cursor.row].splice(cursor.col, 0, span);
+    characters[cursor.row].splice(cursor.col, 0, event.key);
+
+    if (spans[cursor.row][cursor.col + 1]) {
+        spans[cursor.row][cursor.col + 1].before(span);
+    } else {
+        brElArr[cursor.row].before(span);
+    }
+
+    cursor.col++;
+    updateCursor();
+
+}
+
 function handleKeyPress(event) {
-    switch(event.key) {
-        case ("ArrowLeft"):
-        case("h"):
-            moveLeft(cursor);
-            break;
-        
-        case ("ArrowDown"):
-        case("j"):
-            moveDown(cursor);
-            break;
-        
-        case ("ArrowUp"):
-        case("k"):
-            moveUp(cursor);
-            break;
-        
-        case("ArrowRight"):
-        case("l"):
-            moveRight(cursor);
-            break;
-        
-        case("x"):
-            deleteChar(cursor);
-            break;
+    if (mode === "normal") {
+        const func = parseInput(event);
+        if (func !== null) func();
+    }
+    else {
+        console.log("test");
+        if (event.key === "Escape") {
+            exitInsertMode();
+        }
+        else {
+            handleInsertMode(event);
+        }
     }
 }
 
