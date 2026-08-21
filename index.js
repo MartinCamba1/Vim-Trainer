@@ -29,6 +29,9 @@ const commands = new Map([
     ["x", deleteChar],
     ["dd", deleteLine],
     ["i", insertCommand],
+    ["A", appendAtEndLine],
+    ["w", wCommand],
+    ["dw", dwCommand],
 ]);
 
 let mode = "normal";        /* "insert" or "normal" */
@@ -72,6 +75,7 @@ function spanify(text) {
         brElArr.push(brEl);
         terminalText.appendChild(brEl);
     }
+    console.log(characters);
     return res;
     
 }
@@ -107,7 +111,7 @@ function parseInput(event) {
 function updateCursor() {
     const row = spans[cursor.row];
 
-    if (row.length > 0) {
+    if (row.length > 0 && cursor.col < spans[cursor.row].length) {
         row[cursor.col].before(cursorElement);
     } else {
         brElArr[cursor.row].before(cursorElement);
@@ -203,11 +207,69 @@ function deleteLine() {
     }
 }
 
+function findNextWord(inputRow, inputCol) {
+    let row = inputRow;
+    let col = inputCol;
+
+    for (let i = col + 1; i < characters[row].length; i++) {
+        const char = characters[row][i];
+
+        if (char == ".") return {row, col: i};
+        else if (char == " ") {
+            if (row < characters.length - 1 && 
+                i === characters[row].length - 1) {
+                    return {row: row + 1, col: 0};
+            }
+            return {row, col: i + 1};
+            
+        }
+    }
+    if (row < characters.length - 1) {
+        return {row: row + 1, col: 0};
+    }
+    return {row, col};
+}
+
+function wCommand() {
+    const pos = findNextWord(cursor.row, cursor.col);
+    cursor.row = pos.row;
+    cursor.col = pos.col;
+    updateCursor();
+}
+
+/* Need to add not deleting whitespace such as . after the word */
+function dwCommand() {
+    const pos = findNextWord(cursor.row, cursor.col);
+    const newRow = pos.row;
+    const newCol = pos.col;
+
+    if (cursor.row !== newRow) {
+        /* Add deleting backwards with function findPrevWord() */
+        return;
+    }
+    characters[cursor.row].splice(cursor.col, (newCol - cursor.col));
+    
+    for (let i = cursor.col; i < newCol; i++) {
+        spans[cursor.row][i].remove();
+    }
+    spans[cursor.row].splice(cursor.col, (newCol - cursor.col));
+
+
+}
+
+function appendAtEndLine() {
+    mode = "insert";
+    cursor.col = spans[cursor.row].length;
+    updateCursor();
+}
+
 function insertCommand() {
     mode = "insert";
 }
 
 function exitInsertMode() {
+    if (cursor.col > 0) cursor.col--;
+    updateCursor();
     mode = "normal";
 }
 
